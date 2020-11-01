@@ -1,11 +1,11 @@
 const express = require("express")
+const usersRouter = require("./users/users-router")
 const server = express()
 const port = process.env.PORT || 5000
 require("dotenv").config()
-const usersRouter = require("./users/users-router")
 
 server.use(express.json())
-server.use(usersRouter)
+server.use("/api", usersRouter)
 server.use((err, req, res, next) => {
 	console.log(err)
 	

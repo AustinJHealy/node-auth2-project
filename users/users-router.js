@@ -1,37 +1,62 @@
 const express = require("express");
-const bcrypt = require("bcryptjs");
+const bcryptjs = require("bcryptjs");
 const Users = require("./users-model");
-const { restrict } = require("./users-middleware");
+const restrict = require("./users-middleware");
 const jwt = require("jsonwebtoken");
 const router = express.Router();
 
-router.get("/users", restrict(), async (req, res, next) => {
-  try {
-    res.json(await Users.find());
-  } catch (err) {
-    next(err);
-  }
-});
+function generateToken(user) {
+  const payload = {
+    subject: user.id,
+    username: user.username,
+  };
 
-router.post("/users", async (req, res, next) => {
-  try {
-    const { username, password } = req.body;
-    const user = await Users.findByUsername(username);
+  return jwt.sign(payload, process.env.JWT_SECRET);
+}
+router.post("/register", (req, res) => {
+  let user = req.body;
 
-    if (user) {
-      return res.status(409).json({
-        message: "Username is already taken",
-      });
-    }
+  const hashed = bcryptjs.hashSync(user.password, 14);
 
-    const newUser = await Users.add({
-      username,
-      // hash the password with a time complexity of "14"
-      password: await bcrypt.hash(password, 14),
+  user.password = hashed;
+
+  Users.add(user)
+    .then((newUser) => {
+      res.status(201).json(newUser);
+    })
+    .catch((error) => {
+      res.status(500).json(error);
     });
-
-    res.status(201).json(newUser);
-  } catch (err) {
-    next(err);
-  }
 });
+
+router.post("/login", (req, res) => {
+  let { username, password } = req.body;
+  Users.findBy({ username })
+    .then((user) => {
+      if (user && bcryptjs.compareSync(password, user.password)) {
+        const token = generateToken(user);
+
+        res.status(200).json({
+          message: `Welcome ${user.username}`,
+          token,
+        });
+      } else {
+        res.status(401).json({ message: "Invalid credentials" });
+      }
+    })
+    .catch((error) => {
+      res.status(500).json(error);
+    });
+});
+
+router.get("/users", restrict, (req, res, next) => {
+  Users.find()
+    .then((users) => {
+      res.json(users);
+    })
+    .catch((err) => {
+      res.status(500).json({ message: "Unable to get users" });
+    });
+});
+
+module.exports = router;
